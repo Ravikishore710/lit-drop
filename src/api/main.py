@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
+
 
 from src.common.logging import logger
 from src.common.types import ProcessingStatus
@@ -122,6 +123,11 @@ def run_async_ingestion(temp_pdf_path: Path, filename: str):
         logger.error(f"Async ingestion failed for {filename}: {exc}")
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "version": settings.PARSER_VERSION}
@@ -135,6 +141,33 @@ def readiness_check():
         "neo4j": True,
         "embedding_provider": settings.EMBEDDING_PROVIDER,
     }
+
+
+def resolve_document_file(identifier: str) -> Path:
+    clean_id = identifier.strip().replace("sha256:", "")
+    # 1. Exact match on clean hash
+    exact_file = settings.CANONICAL_DIR / "documents" / f"{clean_id}.json"
+    if exact_file.exists():
+        return exact_file
+
+    # 2. Match against filename, arXiv ID, or title
+    doc_folder = settings.CANONICAL_DIR / "documents"
+    if doc_folder.exists():
+        for candidate in doc_folder.glob("*.json"):
+            try:
+                doc = CanonicalSerializer.load_document(candidate)
+                if (
+                    doc.document_id == identifier
+                    or doc.document_id.endswith(clean_id)
+                    or clean_id in doc.metadata.original_filename
+                    or doc.metadata.original_filename.startswith(clean_id)
+                    or clean_id.lower() in doc.metadata.title.lower()
+                ):
+                    return candidate
+            except Exception:
+                pass
+
+    raise HTTPException(status_code=404, detail=f"Document '{identifier}' not found in catalog.")
 
 
 @app.post("/api/v1/documents")
@@ -191,32 +224,34 @@ def list_documents():
 
 @app.get("/api/v1/documents/{document_id}")
 def get_document(document_id: str):
-    clean_id = document_id.replace("sha256:", "")
-    doc_file = settings.CANONICAL_DIR / "documents" / f"{clean_id}.json"
-    if not doc_file.exists():
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc_file = resolve_document_file(document_id)
     return CanonicalSerializer.load_document(doc_file)
 
 
 @app.delete("/api/v1/documents/{document_id}")
 def delete_document(document_id: str):
-    clean_id = document_id.replace("sha256:", "")
-    doc_file = settings.CANONICAL_DIR / "documents" / f"{clean_id}.json"
-    if doc_file.exists():
+    try:
+        doc_file = resolve_document_file(document_id)
         doc_file.unlink()
+    except HTTPException:
+        pass
     DOCUMENTS_DB.pop(document_id, None)
     return {"message": "Document deleted", "document_id": document_id}
 
 
 @app.post("/api/v1/documents/{document_id}/query", response_model=GroundedAnswer)
 def query_document(document_id: str, request: QueryRequest):
+    doc_file = resolve_document_file(document_id)
+    clean_id = doc_file.stem
+    actual_doc_id = f"sha256:{clean_id}"
+
     # 1. Classify Query Intent
     intent = query_router.classify_query(request.query)
 
     # 2. Hybrid Retrieve Candidates
     candidates = retrieval_engine.retrieve(
         query=request.query,
-        filter_doc_id=document_id,
+        filter_doc_id=actual_doc_id,
         top_candidates=30,
     )
 
@@ -243,6 +278,7 @@ def query_document(document_id: str, request: QueryRequest):
     return grounded_answer
 
 
+
 @app.post("/api/v1/search")
 def search_documents(request: SearchRequest):
     candidates = retrieval_engine.retrieve(
@@ -255,7 +291,8 @@ def search_documents(request: SearchRequest):
 
 @app.get("/api/v1/documents/{document_id}/pages/{page_number}")
 def get_page_image(document_id: str, page_number: int):
-    clean_id = document_id.replace("sha256:", "")
+    doc_file = resolve_document_file(document_id)
+    clean_id = doc_file.stem
     img_path = (
         settings.INTERMEDIATE_DIR
         / clean_id
@@ -269,8 +306,9 @@ def get_page_image(document_id: str, page_number: int):
 
 @app.get("/api/v1/documents/{document_id}/graph")
 def get_document_graph(document_id: str):
-    clean_id = document_id.replace("sha256:", "")
-    subgraph = graph_builder.find_connected_subgraph(document_id, depth=2)
+    doc_file = resolve_document_file(document_id)
+    actual_doc_id = f"sha256:{doc_file.stem}"
+    subgraph = graph_builder.find_connected_subgraph(actual_doc_id, depth=2)
     return subgraph
 
 
@@ -313,7 +351,12 @@ def compare_documents(request: CompareRequest):
 
     all_candidates = []
     for d_id in request.document_ids:
-        cands = retrieval_engine.retrieve(query=request.query, filter_doc_id=d_id, top_candidates=15)
+        try:
+            doc_file = resolve_document_file(d_id)
+            actual_id = f"sha256:{doc_file.stem}"
+        except HTTPException:
+            actual_id = d_id
+        cands = retrieval_engine.retrieve(query=request.query, filter_doc_id=actual_id, top_candidates=15)
         all_candidates.extend(cands)
 
     top_candidates = reranker.rerank(query=request.query, candidates=all_candidates, top_n=request.top_k)
@@ -321,3 +364,4 @@ def compare_documents(request: CompareRequest):
     raw_answer = llm_orchestrator.generate_grounded_answer(query=request.query, evidence_bundle=bundle_text)
     grounded = citation_verifier.verify_answer(raw_answer=raw_answer, valid_sources=source_map)
     return grounded
+
