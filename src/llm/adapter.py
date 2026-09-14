@@ -99,10 +99,14 @@ class LocalQuantizedLLMAdapter(BaseLLMAdapter):
             return "Local model inference placeholder based on evidence [SRC_01]."
 
 
+from src.llm.local_runner import RAMSafeLocalRunner
+
+
 class LLMOrchestrator:
     def __init__(self):
         self.gemini_adapter = GeminiLLMAdapter()
         self.local_adapter = LocalQuantizedLLMAdapter()
+        self.safe_local_runner = RAMSafeLocalRunner()
 
     def generate_grounded_answer(
         self,
@@ -119,5 +123,19 @@ class LLMOrchestrator:
         user_prompt = f"Query: {query}\n\nEvidence:\n{evidence_bundle}\n\nAnswer with inline citations:"
 
         if force_local or settings.LOCAL_LLM_ENABLED:
-            return self.local_adapter.generate(user_prompt, system_prompt=system_prompt)
+            # 1. Try local OpenAI/Ollama server if available
+            try:
+                ans = self.local_adapter.generate(user_prompt, system_prompt=system_prompt)
+                if ans and "placeholder" not in ans.lower():
+                    return ans
+            except Exception:
+                pass
+
+            # 2. Try RAM-safe in-process micro runner if memory allows
+            if self.safe_local_runner.can_safely_load():
+                ans = self.safe_local_runner.generate(f"{system_prompt}\n\n{user_prompt}")
+                if ans:
+                    return ans
+
+        # Default to frontier cloud model (Gemini 3.6 Flash - zero local RAM consumption)
         return self.gemini_adapter.generate(user_prompt, system_prompt=system_prompt)

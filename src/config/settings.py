@@ -42,7 +42,7 @@ class AppSettings(BaseSettings):
 
     # LLM Settings
     LLM_PROVIDER: str = "gemini"
-    LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_MODEL: str = "gemini-3.6-flash"
     GEMINI_API_KEY: str = ""
     MAX_OUTPUT_TOKENS: int = 2048
     TEMPERATURE: float = 0.2
