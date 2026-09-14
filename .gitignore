@@ -1,0 +1,77 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Environment variables & secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Data & Corpora (External / Large Artifacts)
+data/raw/*
+!data/raw/.gitkeep
+data/intermediate/*
+!data/intermediate/.gitkeep
+data/canonical/*
+!data/canonical/.gitkeep
+data/indexes/*
+!data/indexes/.gitkeep
+data/evaluation/public/*
+!data/evaluation/public/.gitkeep
+data/evaluation/results/*
+!data/evaluation/results/.gitkeep
+
+# Storage & Database mounts
+qdrant_storage/
+neo4j_data/
+neo4j_logs/
+minio_data/
+
+# Model weights & large caches
+models/
+.cache/
+huggingface/
+torch/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.next/

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SciDocIntel Studio — Scientific Multimodal Document Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+  <div id="app" class="app-container">
+    
+    <!-- Global Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="header-title">SciDocIntel <span class="version-tag">v1.0-prod</span></h1>
+          <p class="header-subtitle">Scientific Multimodal Document Intelligence & Evidence Grounding Studio</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text" id="api-status">Backend Connected (localhost:8000)</span>
+        </div>
+        <button id="upload-btn-trigger" class="btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Upload PDF
+        </button>
+        <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" />
+      </div>
+    </header>
+
+    <!-- Main 3-Column Workspace -->
+    <main class="workspace-grid">
+      
+      <!-- Column 1: Document Library & Search -->
+      <section class="panel panel-library">
+        <div class="panel-header">
+          <h2 class="panel-title">Corpus Library</h2>
+          <span class="badge" id="doc-count-badge">0 papers</span>
+        </div>
+        <div class="search-box-container">
+          <input type="text" id="library-search" class="input-search" placeholder="Filter by title, author, arXiv ID..." />
+        </div>
+        <div class="document-list" id="document-list">
+          <!-- Populated dynamically via JS -->
+          <div class="loading-placeholder">Loading document collection...</div>
+        </div>
+      </section>
+
+      <!-- Column 2: Document Inspection & Multimodal Viewer -->
+      <section class="panel panel-viewer">
+        <div class="viewer-toolbar">
+          <div class="viewer-meta">
+            <span class="doc-label" id="current-doc-title">Select a document from the corpus</span>
+            <span class="page-indicator" id="current-page-indicator">Page — / —</span>
+          </div>
+          <div class="viewer-actions">
+            <button class="btn-icon" id="prev-page-btn" title="Previous Page">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button class="btn-icon" id="next-page-btn" title="Next Page">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+            <span class="separator"></span>
+            <button class="btn-toggle active" id="toggle-bboxes-btn">Elements Overlay</button>
+          </div>
+        </div>
+
+        <div class="viewer-viewport" id="viewer-viewport">
+          <div class="page-canvas-wrapper" id="page-wrapper">
+            <img id="page-image" class="page-render-img" src="" alt="Document Page" style="display:none;" />
+            <svg id="bbox-overlay" class="bbox-svg-layer"></svg>
+          </div>
+          <div class="empty-viewer-state" id="empty-viewer-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <p>Select any paper on the left to inspect its rendered pages, bounding boxes, tables, and equations.</p>
+          </div>
+        </div>
+
+        <!-- Element Inspection Drawer -->
+        <div class="viewer-inspector" id="element-inspector">
+          <div class="inspector-header">
+            <span class="inspector-title">Active Element Inspector</span>
+            <span class="badge" id="inspector-elem-type">None</span>
+          </div>
+          <div class="inspector-content" id="inspector-elem-content">
+            Hover or click on any bounding box in the page to inspect its normalized text, coordinates, or structured table cells.
+          </div>
+        </div>
+      </section>
+
+      <!-- Column 3: Grounded Intelligence & Evidence Reasoning -->
+      <section class="panel panel-qa">
+        <div class="panel-header">
+          <h2 class="panel-title">Grounded Intelligence</h2>
+          <span class="badge badge-subtle">Hybrid RRF + Reranker</span>
+        </div>
+
+        <!-- Query Form -->
+        <form id="query-form" class="query-form">
+          <div class="query-input-wrapper">
+            <textarea id="query-input" class="query-textarea" rows="3" placeholder="Ask a factual, methodology, table, chart, or equation question..."></textarea>
+          </div>
+          <div class="query-actions">
+            <div class="intent-preview" id="intent-preview">
+              <span class="chip-intent" id="intent-chip">Intent: Auto-detect</span>
+            </div>
+            <button type="submit" id="submit-query-btn" class="btn-primary">
+              Run Grounded Query
+            </button>
+          </div>
+        </form>
+
+        <!-- Response Area -->
+        <div class="qa-results-container" id="qa-results">
+          <div class="qa-welcome">
+            <h3 class="welcome-heading">Grounded Multimodal Reasoning</h3>
+            <p class="welcome-body">
+              SciDocIntel uses hybrid retrieval (Dense Qdrant + Lexical BM25) fused via Reciprocal Rank Fusion (RRF), Cross-Encoder reranking, and citation verification.
+            </p>
+            <div class="status-tag-legend">
+              <span class="tag-legend-item"><span class="badge badge-found">FOUND</span> Verified by citations</span>
+              <span class="tag-legend-item"><span class="badge badge-inferred">INFERRED</span> Derived claim</span>
+              <span class="tag-legend-item"><span class="badge badge-notfound">NOT_FOUND</span> Insufficient evidence</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

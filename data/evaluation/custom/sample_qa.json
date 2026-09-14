@@ -1,0 +1,56 @@
+[
+  {
+    "question_id": "Q0001",
+    "document_ids": ["1706.03762"],
+    "question_type": "factual",
+    "question": "How many encoder layers are used in the base Transformer model described in Attention Is All You Need?",
+    "gold_answer": "The base Transformer model consists of a stack of N = 6 identical encoder layers.",
+    "gold_evidence_ids": ["1706.03762_P003_E004"],
+    "difficulty": "easy"
+  },
+  {
+    "question_id": "Q0002",
+    "document_ids": ["1706.03762"],
+    "question_type": "table",
+    "question": "What is the BLEU score achieved by the Transformer (big) model on the WMT 2014 English-to-German translation task in Table 2?",
+    "gold_answer": "The Transformer (big) model achieved a BLEU score of 28.4 on WMT 2014 English-to-German translation.",
+    "gold_evidence_ids": ["1706.03762_P008_TAB001"],
+    "difficulty": "medium"
+  },
+  {
+    "question_id": "Q0003",
+    "document_ids": ["1512.03385"],
+    "question_type": "factual",
+    "question": "What is the top-5 error rate of ResNet-152 on the ImageNet validation set in Deep Residual Learning for Image Recognition?",
+    "gold_answer": "ResNet-152 achieved a top-5 error rate of 4.49% on the ImageNet validation set with 10-crop evaluation.",
+    "gold_evidence_ids": ["1512.03385_P006_TAB003"],
+    "difficulty": "medium"
+  },
+  {
+    "question_id": "Q0004",
+    "document_ids": ["1412.6980"],
+    "question_type": "equation",
+    "question": "What are the default hyperparameter values recommended for beta1, beta2, and epsilon in the Adam optimizer?",
+    "gold_answer": "The recommended defaults are beta1 = 0.9, beta2 = 0.999, and epsilon = 1e-8.",
+    "gold_evidence_ids": ["1412.6980_P002_E008"],
+    "difficulty": "easy"
+  },
+  {
+    "question_id": "Q0005",
+    "document_ids": ["1706.03762", "1810.04805"],
+    "question_type": "comparison",
+    "question": "How does BERT's pre-training objective differ from the autoregressive decoder in the original Transformer?",
+    "gold_answer": "BERT uses Masked Language Modeling (MLM) and Next Sentence Prediction (NSP) with bidirectional self-attention, whereas the original Transformer decoder uses autoregressive masked causal self-attention.",
+    "gold_evidence_ids": ["1706.03762_P003_E005", "1810.04805_P003_E002"],
+    "difficulty": "hard"
+  },
+  {
+    "question_id": "Q0006",
+    "document_ids": ["1706.03762"],
+    "question_type": "not_found",
+    "question": "What is the quantum computing advantage evaluated on the Sycamore processor in this paper?",
+    "gold_answer": "The paper 'Attention Is All You Need' does not discuss quantum computing or the Sycamore processor.",
+    "gold_evidence_ids": [],
+    "difficulty": "easy"
+  }
+]
