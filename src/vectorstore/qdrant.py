@@ -107,15 +107,24 @@ class QdrantVectorStore:
                 ]
             )
 
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter=query_filter,
-            limit=top_k,
-        )
+        if hasattr(self.client, "query_points"):
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                query_filter=query_filter,
+                limit=top_k,
+            )
+            points = response.points
+        else:
+            points = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=top_k,
+            )
 
         hits = []
-        for r in results:
+        for r in points:
             hit = dict(r.payload or {})
             hit["score"] = float(r.score)
             hits.append(hit)

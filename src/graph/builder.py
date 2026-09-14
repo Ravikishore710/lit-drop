@@ -127,3 +127,26 @@ class DocumentGraphBuilder:
             for u, v in subgraph.edges
         ]
         return {"nodes": nodes, "edges": edges}
+
+    def find_citation_path(self, source_id: str, target_id: str) -> List[str]:
+        if source_id in self.local_graph and target_id in self.local_graph:
+            try:
+                return nx.shortest_path(self.local_graph, source=source_id, target=target_id)
+            except nx.NetworkXNoPath:
+                return []
+        return []
+
+    def get_citation_network(self, doc_id: str) -> Dict[str, List[str]]:
+        citing_elements = []
+        cited_targets = []
+        if doc_id in self.local_graph:
+            for succ in self.local_graph.successors(doc_id):
+                for edge_target in self.local_graph.successors(succ):
+                    edge_data = self.local_graph.get_edge_data(succ, edge_target)
+                    if edge_data and edge_data.get("relation_type") == "CITES":
+                        cited_targets.append(edge_target)
+        return {
+            "document_id": doc_id,
+            "cited_targets": list(set(cited_targets)),
+        }
+
