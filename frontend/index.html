@@ -1,153 +1,255 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SciDocIntel Studio — Scientific Multimodal Document Intelligence</title>
+  <title>lit-drop 🔥 — Multimodal Scientific Document Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased">
+<body class="bg-slate-900 text-slate-100 antialiased">
   <div id="app" class="app-container">
     
-    <!-- Global Header -->
+    <!-- Top Global Navigation Bar -->
     <header class="app-header">
       <div class="header-left">
         <div class="logo-mark">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
+          <span class="logo-fire">🔥</span>
         </div>
-        <div>
-          <h1 class="header-title">SciDocIntel <span class="version-tag">v1.0-prod</span></h1>
-          <p class="header-subtitle">Scientific Multimodal Document Intelligence & Evidence Grounding Studio</p>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <h1 class="header-title">lit-drop</h1>
+            <span class="version-tag">v1.0</span>
+          </div>
+          <p class="header-subtitle">Multimodal Scientific Document Intelligence & Grounded Reasoning</p>
         </div>
       </div>
+
+      <!-- Center Workflow Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="studio">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          Paper Studio
+        </button>
+        <button class="nav-tab" data-tab="compare">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="9" height="18" rx="2"></rect><rect x="13" y="3" width="9" height="18" rx="2"></rect></svg>
+          Compare Papers
+        </button>
+        <button class="nav-tab" data-tab="search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Hybrid Search
+        </button>
+        <button class="nav-tab" data-tab="graph">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+          Citation Graph
+        </button>
+      </nav>
+
+      <!-- Right Header Actions -->
       <div class="header-right">
-        <div class="status-indicator">
+        <div class="engine-indicator">
           <span class="status-dot"></span>
-          <span class="status-text" id="api-status">Backend Connected (localhost:8000)</span>
+          <span class="engine-label" id="engine-status">Gemini 3.6 Flash</span>
         </div>
         <button id="upload-btn-trigger" class="btn-primary">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           Upload PDF
         </button>
         <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" />
       </div>
     </header>
 
-    <!-- Main 3-Column Workspace -->
-    <main class="workspace-grid">
-      
-      <!-- Column 1: Document Library & Search -->
-      <section class="panel panel-library">
-        <div class="panel-header">
-          <h2 class="panel-title">Corpus Library</h2>
-          <span class="badge" id="doc-count-badge">0 papers</span>
-        </div>
-        <div class="search-box-container">
-          <input type="text" id="library-search" class="input-search" placeholder="Filter by title, author, arXiv ID..." />
-        </div>
-        <div class="document-list" id="document-list">
-          <!-- Populated dynamically via JS -->
-          <div class="loading-placeholder">Loading document collection...</div>
-        </div>
-      </section>
+    <!-- TAB 1: Single Paper Studio -->
+    <main class="tab-pane active" id="tab-studio">
+      <div class="workspace-grid">
+        
+        <!-- Left Column: Corpus Library -->
+        <section class="panel panel-library">
+          <div class="panel-header">
+            <h2 class="panel-title">Corpus Library</h2>
+            <span class="badge badge-accent" id="doc-count-badge">20 papers</span>
+          </div>
+          <div class="search-box-container">
+            <input type="text" id="library-search" class="input-search" placeholder="Filter by arXiv ID, title..." />
+          </div>
+          <div class="document-list" id="document-list">
+            <div class="loading-placeholder">Loading corpus documents...</div>
+          </div>
+        </section>
 
-      <!-- Column 2: Document Inspection & Multimodal Viewer -->
-      <section class="panel panel-viewer">
-        <div class="viewer-toolbar">
-          <div class="viewer-meta">
-            <span class="doc-label" id="current-doc-title">Select a document from the corpus</span>
-            <span class="page-indicator" id="current-page-indicator">Page — / —</span>
-          </div>
-          <div class="viewer-actions">
-            <button class="btn-icon" id="prev-page-btn" title="Previous Page">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <button class="btn-icon" id="next-page-btn" title="Next Page">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
-            <span class="separator"></span>
-            <button class="btn-toggle active" id="toggle-bboxes-btn">Elements Overlay</button>
-          </div>
-        </div>
-
-        <div class="viewer-viewport" id="viewer-viewport">
-          <div class="page-canvas-wrapper" id="page-wrapper">
-            <img id="page-image" class="page-render-img" src="" alt="Document Page" style="display:none;" />
-            <svg id="bbox-overlay" class="bbox-svg-layer"></svg>
-          </div>
-          <div class="empty-viewer-state" id="empty-viewer-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            <p>Select any paper on the left to inspect its rendered pages, bounding boxes, tables, and equations.</p>
-          </div>
-        </div>
-
-        <!-- Element Inspection Drawer -->
-        <div class="viewer-inspector" id="element-inspector">
-          <div class="inspector-header">
-            <span class="inspector-title">Active Element Inspector</span>
-            <span class="badge" id="inspector-elem-type">None</span>
-          </div>
-          <div class="inspector-content" id="inspector-elem-content">
-            Hover or click on any bounding box in the page to inspect its normalized text, coordinates, or structured table cells.
-          </div>
-        </div>
-      </section>
-
-      <!-- Column 3: Grounded Intelligence & Evidence Reasoning -->
-      <section class="panel panel-qa">
-        <div class="panel-header">
-          <h2 class="panel-title">Grounded Intelligence</h2>
-          <span class="badge badge-subtle">Hybrid RRF + Reranker</span>
-        </div>
-
-        <!-- Query Form -->
-        <form id="query-form" class="query-form">
-          <div class="query-input-wrapper">
-            <textarea id="query-input" class="query-textarea" rows="3" placeholder="Ask a factual, methodology, table, chart, or equation question..."></textarea>
-          </div>
-          <div class="query-actions">
-            <div class="intent-preview" id="intent-preview">
-              <span class="chip-intent" id="intent-chip">Intent: Auto-detect</span>
+        <!-- Center Column: 150 DPI Page Viewer & BBoxes -->
+        <section class="panel panel-viewer">
+          <div class="viewer-toolbar">
+            <div class="viewer-meta">
+              <span class="doc-label" id="current-doc-title">Select a paper from the left</span>
+              <span class="page-indicator" id="current-page-indicator">Page — / —</span>
             </div>
-            <button type="submit" id="submit-query-btn" class="btn-primary">
-              Run Grounded Query
-            </button>
-          </div>
-        </form>
-
-        <!-- Response Area -->
-        <div class="qa-results-container" id="qa-results">
-          <div class="qa-welcome">
-            <h3 class="welcome-heading">Grounded Multimodal Reasoning</h3>
-            <p class="welcome-body">
-              SciDocIntel uses hybrid retrieval (Dense Qdrant + Lexical BM25) fused via Reciprocal Rank Fusion (RRF), Cross-Encoder reranking, and citation verification.
-            </p>
-            <div class="status-tag-legend">
-              <span class="tag-legend-item"><span class="badge badge-found">FOUND</span> Verified by citations</span>
-              <span class="tag-legend-item"><span class="badge badge-inferred">INFERRED</span> Derived claim</span>
-              <span class="tag-legend-item"><span class="badge badge-notfound">NOT_FOUND</span> Insufficient evidence</span>
+            <div class="viewer-actions">
+              <button class="btn-icon" id="prev-page-btn" title="Previous Page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button class="btn-icon" id="next-page-btn" title="Next Page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+              <span class="separator"></span>
+              <button class="btn-toggle active" id="toggle-bboxes-btn">Bounding Boxes</button>
             </div>
           </div>
-        </div>
-      </section>
 
+          <div class="viewer-viewport" id="viewer-viewport">
+            <div class="page-canvas-wrapper" id="page-wrapper">
+              <img id="page-image" class="page-render-img" src="" alt="Document Page" style="display:none;" />
+              <svg id="bbox-overlay" class="bbox-svg-layer"></svg>
+            </div>
+            <div class="empty-viewer-state" id="empty-viewer-state">
+              <div class="empty-icon">📄</div>
+              <p>Select any paper on the left to inspect its rendered pages, bounding boxes, tables, and equations.</p>
+            </div>
+          </div>
+
+          <!-- Bottom Drawer: Active Element Inspector -->
+          <div class="viewer-inspector" id="element-inspector">
+            <div class="inspector-header">
+              <span class="inspector-title">Active Element Inspector</span>
+              <span class="badge badge-subtle" id="inspector-elem-type">None</span>
+              <button class="btn-xs btn-crop-preview" id="btn-crop-zoom" style="display:none;">View Visual Crop</button>
+            </div>
+            <div class="inspector-content" id="inspector-elem-content">
+              Hover or click on any bounding box in the page to inspect its normalized text, coordinates, or structured table cells.
+            </div>
+          </div>
+        </section>
+
+        <!-- Right Column: Grounded Intelligence & Evidence Reasoning -->
+        <section class="panel panel-qa">
+          <div class="panel-header">
+            <h2 class="panel-title">Grounded Intelligence</h2>
+            <span class="badge badge-found">Verified Receipts</span>
+          </div>
+
+          <!-- Query Form -->
+          <form id="query-form" class="query-form">
+            <div class="query-input-wrapper">
+              <textarea id="query-input" class="query-textarea" rows="3" placeholder="Ask a question about equations, architectures, or benchmark metrics..."></textarea>
+            </div>
+            
+            <!-- Quick Suggestions Pill Row -->
+            <div class="suggestions-row">
+              <span class="suggestion-pill" data-query="How many encoder and decoder layers does the base model have?">Layers?</span>
+              <span class="suggestion-pill" data-query="What optimizer, learning rate schedule, and warmup steps were used?">Optimization?</span>
+              <span class="suggestion-pill" data-query="What is the computational complexity per layer of self-attention vs recurrent layers?">Complexity?</span>
+            </div>
+
+            <div class="query-actions">
+              <div class="intent-preview">
+                <span class="chip-intent" id="intent-chip">Intent: Auto-Routing</span>
+              </div>
+              <button type="submit" id="submit-query-btn" class="btn-primary">
+                Run Grounded Query
+              </button>
+            </div>
+          </form>
+
+          <!-- Response & Evidence Area -->
+          <div class="qa-results-container" id="qa-results">
+            <div class="qa-welcome">
+              <h3 class="welcome-heading">Strict Citation Grounding</h3>
+              <p class="welcome-body">
+                Every claim is anchored to numbered evidence tags (<span class="cite-tag-preview">[SRC_01]</span>). Click any tag in the answer to automatically flip the center viewer to that exact page and highlight the source bounding box.
+              </p>
+              <div class="status-tag-legend">
+                <span class="tag-legend-item"><span class="badge badge-found">FOUND</span> 100% Grounded</span>
+                <span class="tag-legend-item"><span class="badge badge-inferred">INFERRED</span> Derived claim</span>
+                <span class="tag-legend-item"><span class="badge badge-notfound">NOT_FOUND</span> Insufficient data</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
     </main>
+
+    <!-- TAB 2: Multi-Paper Compare -->
+    <main class="tab-pane" id="tab-compare">
+      <div class="compare-container">
+        <div class="compare-sidebar">
+          <div class="panel-header">
+            <h2 class="panel-title">Select Papers to Compare</h2>
+            <span class="badge badge-accent" id="compare-selected-count">0 selected</span>
+          </div>
+          <div class="compare-doc-selector" id="compare-doc-selector">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+        <div class="compare-main">
+          <div class="compare-prompt-box">
+            <textarea id="compare-query-input" class="query-textarea" rows="3" placeholder="Enter comparative prompt (e.g. Compare self-attention masking in Transformer decoder vs BERT bidirectional MLM pre-training)..."></textarea>
+            <div class="compare-actions-row">
+              <div class="compare-suggestions">
+                <span class="suggestion-pill" data-compare="Compare self-attention masking in Transformer decoder vs BERT pre-training.">Transformer vs BERT</span>
+                <span class="suggestion-pill" data-compare="Compare Adam optimizer with warmup in Transformer vs SGD with momentum in ResNet.">Optimization Strategies</span>
+              </div>
+              <button id="btn-run-compare" class="btn-primary">Execute Comparative Synthesis</button>
+            </div>
+          </div>
+          <div class="compare-results-area" id="compare-results-area">
+            <div class="empty-state-box">
+              <p>Select at least 2 papers on the left and enter a comparative question to generate cross-paper grounded synthesis.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 3: Global Hybrid Search -->
+    <main class="tab-pane" id="tab-search">
+      <div class="search-page-container">
+        <div class="search-header-box">
+          <h2 class="search-heading">Hybrid Semantic & Exact Lexical Search</h2>
+          <p class="search-subheading">Combines Qdrant SQ8 dense vector embeddings with BM25 lexical token matching via Reciprocal Rank Fusion.</p>
+          <div class="global-search-bar-row">
+            <input type="text" id="global-search-input" class="global-search-input" placeholder="Search across all 20 papers (e.g. residual shortcut, softmax((QK^T)/sqrt(d_k)), Adam epsilon)..." />
+            <button id="btn-run-global-search" class="btn-primary">Search</button>
+          </div>
+        </div>
+        <div class="search-results-list" id="global-search-results">
+          <div class="empty-state-box">
+            <p>Enter any concept, author name, or mathematical equation to search across the entire corpus.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 4: Citation Graph Explorer -->
+    <main class="tab-pane" id="tab-graph">
+      <div class="graph-page-container">
+        <div class="graph-toolbar">
+          <div class="graph-meta">
+            <span class="graph-title" id="graph-doc-title">Select a paper to explore its relationship graph</span>
+            <span class="badge badge-accent" id="graph-stats-badge">0 nodes, 0 edges</span>
+          </div>
+        </div>
+        <div class="graph-canvas-wrapper" id="graph-canvas-wrapper">
+          <svg id="graph-svg" class="graph-svg-canvas"></svg>
+        </div>
+      </div>
+    </main>
+
+    <!-- Visual Crop Zoom Modal -->
+    <div class="modal-overlay" id="crop-modal" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-crop-title">Visual Crop Inspection</h3>
+          <button class="btn-icon" id="btn-close-modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <img id="modal-crop-img" src="" alt="Element Crop" class="modal-crop-image" />
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="app.js"></script>

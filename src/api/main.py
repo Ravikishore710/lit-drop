@@ -5,7 +5,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
 
 
 from src.common.logging import logger
@@ -123,9 +125,15 @@ def run_async_ingestion(temp_pdf_path: Path, filename: str):
         logger.error(f"Async ingestion failed for {filename}: {exc}")
 
 
+frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+if frontend_dir.exists():
+    app.mount("/ui", StaticFiles(directory=str(frontend_dir), html=True), name="ui")
+
+
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/ui/")
+
 
 
 @app.get("/health")
@@ -360,7 +368,7 @@ def get_page_image(document_id: str, page_number: int):
 @app.get("/api/v1/documents/{document_id}/graph")
 def get_document_graph(document_id: str):
     doc_file = resolve_document_file(document_id)
-    actual_doc_id = f"sha256:{doc_file.stem}"
+    actual_doc_id = ensure_document_indexed(doc_file)
     subgraph = graph_builder.find_connected_subgraph(actual_doc_id, depth=2)
     return subgraph
 
