@@ -239,11 +239,49 @@ def delete_document(document_id: str):
     return {"message": "Document deleted", "document_id": document_id}
 
 
+INDEXED_DOCUMENTS: set = set()
+
+
+def ensure_document_indexed(doc_file: Path) -> str:
+    clean_id = doc_file.stem
+    actual_doc_id = f"sha256:{clean_id}"
+    if actual_doc_id in INDEXED_DOCUMENTS:
+        return actual_doc_id
+
+    doc = CanonicalSerializer.load_document(doc_file)
+    chunks = chunker.chunk_document(doc)
+    if chunks:
+        chunk_texts = [c.text for c in chunks]
+        embeddings = embedding_provider.embed_batch(chunk_texts)
+        vector_store.index_chunks(chunks, embeddings)
+
+        doc_dicts = [
+            {
+                "chunk_id": c.chunk_id,
+                "document_id": c.document_id,
+                "parent_section_id": c.parent_section_id,
+                "page_numbers": c.page_numbers,
+                "element_ids": c.element_ids,
+                "text": c.text,
+            }
+            for c in chunks
+        ]
+        retrieval_engine.index_documents(doc_dicts)
+
+    try:
+        graph_builder.build_from_document(doc)
+    except Exception:
+        pass
+
+    INDEXED_DOCUMENTS.add(actual_doc_id)
+    logger.info(f"Indexed {len(chunks)} chunks into hybrid store for {actual_doc_id}")
+    return actual_doc_id
+
+
 @app.post("/api/v1/documents/{document_id}/query", response_model=GroundedAnswer)
 def query_document(document_id: str, request: QueryRequest):
     doc_file = resolve_document_file(document_id)
-    clean_id = doc_file.stem
-    actual_doc_id = f"sha256:{clean_id}"
+    actual_doc_id = ensure_document_indexed(doc_file)
 
     # 1. Classify Query Intent
     intent = query_router.classify_query(request.query)
@@ -254,6 +292,7 @@ def query_document(document_id: str, request: QueryRequest):
         filter_doc_id=actual_doc_id,
         top_candidates=30,
     )
+
 
     # 3. Rerank Candidates
     top_candidates = reranker.rerank(
@@ -281,9 +320,23 @@ def query_document(document_id: str, request: QueryRequest):
 
 @app.post("/api/v1/search")
 def search_documents(request: SearchRequest):
+    filter_id = None
+    if request.document_id:
+        try:
+            df = resolve_document_file(request.document_id)
+            filter_id = ensure_document_indexed(df)
+        except HTTPException:
+            filter_id = request.document_id
+    else:
+        if not INDEXED_DOCUMENTS:
+            doc_folder = settings.CANONICAL_DIR / "documents"
+            if doc_folder.exists():
+                for df in list(doc_folder.glob("*.json"))[:5]:
+                    ensure_document_indexed(df)
+
     candidates = retrieval_engine.retrieve(
         query=request.query,
-        filter_doc_id=request.document_id,
+        filter_doc_id=filter_id,
         top_candidates=request.top_k,
     )
     return candidates
@@ -353,7 +406,7 @@ def compare_documents(request: CompareRequest):
     for d_id in request.document_ids:
         try:
             doc_file = resolve_document_file(d_id)
-            actual_id = f"sha256:{doc_file.stem}"
+            actual_id = ensure_document_indexed(doc_file)
         except HTTPException:
             actual_id = d_id
         cands = retrieval_engine.retrieve(query=request.query, filter_doc_id=actual_id, top_candidates=15)
@@ -364,4 +417,5 @@ def compare_documents(request: CompareRequest):
     raw_answer = llm_orchestrator.generate_grounded_answer(query=request.query, evidence_bundle=bundle_text)
     grounded = citation_verifier.verify_answer(raw_answer=raw_answer, valid_sources=source_map)
     return grounded
+
 

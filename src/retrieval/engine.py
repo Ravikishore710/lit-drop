@@ -99,7 +99,11 @@ class HybridRetrievalEngine:
         self.lexical_top_k = lexical_top_k
 
     def index_documents(self, documents: List[Dict[str, Any]]):
-        self.bm25.index(documents)
+        existing_ids = {d["chunk_id"] for d in self.bm25.corpus if "chunk_id" in d}
+        new_docs = [d for d in documents if d.get("chunk_id") not in existing_ids]
+        combined = self.bm25.corpus + new_docs
+        self.bm25.index(combined)
+
 
     def retrieve(
         self,
