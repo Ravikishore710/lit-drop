@@ -54,8 +54,8 @@ class GeminiLLMAdapter(BaseLLMAdapter):
             response = model.generate_content(prompt, generation_config=config)
             return response.text.strip()
         except Exception as exc:
-            logger.error(f"Gemini generation error: {exc}. Falling back to rule-based synthesis.")
-            return "Grounding summary based on retrieved evidence. [SRC_01]"
+            logger.warning(f"Gemini generation unavailable ({exc}). Delegating to local runner / extractive synthesis.")
+            return ""
 
 
 class LocalQuantizedLLMAdapter(BaseLLMAdapter):
@@ -95,8 +95,8 @@ class LocalQuantizedLLMAdapter(BaseLLMAdapter):
                 data = res.json()
                 return data["choices"][0]["message"]["content"].strip()
         except Exception as exc:
-            logger.warning(f"Local LLM unreachable ({exc}). Returning synthesized evidence fallback.")
-            return "Local model inference placeholder based on evidence [SRC_01]."
+            logger.warning(f"Local LLM unreachable ({exc}).")
+            return ""
 
 
 from src.llm.local_runner import RAMSafeLocalRunner
@@ -107,6 +107,62 @@ class LLMOrchestrator:
         self.gemini_adapter = GeminiLLMAdapter()
         self.local_adapter = LocalQuantizedLLMAdapter()
         self.safe_local_runner = RAMSafeLocalRunner()
+
+    def _extractive_grounded_synthesis(self, query: str, evidence_bundle: str) -> str:
+        """
+        Synthesizes factual sentences directly from the retrieved evidence bundle,
+        strictly tagging each extracted claim with its originating [SRC_XX] identifier.
+        Guarantees ZERO dummy placeholders and full evidence grounding.
+        """
+        import re
+
+        snippet_blocks = re.split(r"\[(SRC_\d{2})\]", evidence_bundle)
+        if len(snippet_blocks) < 2:
+            return "Based on the retrieved evidence, the provided document does not contain sufficient details to answer this query."
+
+        query_tokens = set(re.findall(r"\b[A-Za-z0-9_]{3,}\b", query.lower()))
+        stopwords = {
+            "what", "which", "where", "when", "how", "does", "the", "and",
+            "for", "with", "from", "that", "this", "are", "were", "been",
+            "have", "has", "had", "show", "give", "tell", "explain", "about"
+        }
+        meaningful_q_tokens = {t for t in query_tokens if t not in stopwords}
+
+        scored_sentences = []
+        for i in range(1, len(snippet_blocks), 2):
+            src_tag = snippet_blocks[i]
+            src_content = snippet_blocks[i + 1] if i + 1 < len(snippet_blocks) else ""
+            cleaned_content = re.sub(r"^\s*\([^)]+\):\s*", "", src_content).strip()
+
+            raw_sentences = re.split(r"(?<=[.!?])\s+|\n+", cleaned_content)
+            for s in raw_sentences:
+                s_clean = s.strip()
+                if len(s_clean) < 15:
+                    continue
+                s_tokens = set(re.findall(r"\b[A-Za-z0-9_]{3,}\b", s_clean.lower()))
+                overlap = s_tokens.intersection(meaningful_q_tokens)
+                score = len(overlap) * 2.0
+                if any(term in query.lower() for term in ["value", "dimension", "rate", "hyperparameter", "size", "layer", "d_k", "d_v", "learning", "table"]):
+                    if re.search(r"\d+(\.\d+)?", s_clean):
+                        score += 2.0
+                if score > 0:
+                    scored_sentences.append((score, src_tag, s_clean))
+
+        if not scored_sentences:
+            return "Based on the retrieved evidence, the document does not contain explicit information directly answering this query."
+
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+        selected = []
+        seen = set()
+        for _, src_tag, sent in scored_sentences:
+            if sent in seen:
+                continue
+            seen.add(sent)
+            selected.append(f"{sent} [{src_tag}]")
+            if len(selected) >= 3:
+                break
+
+        return " ".join(selected)
 
     def generate_grounded_answer(
         self,
@@ -122,21 +178,29 @@ class LLMOrchestrator:
         )
         user_prompt = f"Query: {query}\n\nEvidence:\n{evidence_bundle}\n\nAnswer with inline citations:"
 
-        if force_local or settings.LOCAL_LLM_ENABLED:
-            # 1. Try local OpenAI/Ollama server if available
+        if not force_local and self.gemini_adapter.api_key:
+            ans = self.gemini_adapter.generate(user_prompt, system_prompt=system_prompt)
+            if ans and len(ans) > 20 and "[SRC_" in ans:
+                return ans
+
+        # Fallback 1: Local server (Ollama/vLLM)
+        if settings.LOCAL_LLM_ENABLED:
             try:
                 ans = self.local_adapter.generate(user_prompt, system_prompt=system_prompt)
-                if ans and "placeholder" not in ans.lower():
+                if ans and "[SRC_" in ans:
                     return ans
             except Exception:
                 pass
 
-            # 2. Try RAM-safe in-process micro runner if memory allows
-            if self.safe_local_runner.can_safely_load():
+        # Fallback 2: Local compact CPU model (Qwen2.5-0.5B-Instruct)
+        if self.safe_local_runner.can_safely_load():
+            try:
                 ans = self.safe_local_runner.generate(user_prompt, system_prompt=system_prompt)
-                if ans:
+                if ans and "[SRC_" in ans:
                     return ans
+            except Exception as exc:
+                logger.warning(f"Local Qwen generation exception: {exc}")
 
-        # Default to frontier cloud model (Gemini 3.6 Flash - zero local RAM consumption)
-        return self.gemini_adapter.generate(user_prompt, system_prompt=system_prompt)
+        # Fallback 3: Strict Extractive Grounded Synthesizer (Zero Hallucination, Zero Placeholders)
+        return self._extractive_grounded_synthesis(query, evidence_bundle)
 
