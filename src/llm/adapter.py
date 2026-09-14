@@ -133,9 +133,10 @@ class LLMOrchestrator:
 
             # 2. Try RAM-safe in-process micro runner if memory allows
             if self.safe_local_runner.can_safely_load():
-                ans = self.safe_local_runner.generate(f"{system_prompt}\n\n{user_prompt}")
+                ans = self.safe_local_runner.generate(user_prompt, system_prompt=system_prompt)
                 if ans:
                     return ans
 
         # Default to frontier cloud model (Gemini 3.6 Flash - zero local RAM consumption)
         return self.gemini_adapter.generate(user_prompt, system_prompt=system_prompt)
+

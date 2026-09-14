@@ -272,3 +272,52 @@ def get_document_graph(document_id: str):
     clean_id = document_id.replace("sha256:", "")
     subgraph = graph_builder.find_connected_subgraph(document_id, depth=2)
     return subgraph
+
+
+@app.get("/api/v1/elements/{element_id}")
+def get_element(element_id: str):
+    clean_elem = element_id.strip()
+    parts = clean_elem.split("_P")
+    if len(parts) >= 2:
+        doc_hash = parts[0].replace("sha256:", "")
+        elem_file = settings.CANONICAL_DIR / "elements" / f"{doc_hash}_elements.jsonl"
+        if elem_file.exists():
+            for elem in CanonicalSerializer.iter_elements(elem_file):
+                if elem.element_id == clean_elem or elem.element_id.endswith(clean_elem):
+                    return elem
+    raise HTTPException(status_code=404, detail=f"Element {element_id} not found")
+
+
+@app.get("/api/v1/elements/{element_id}/crop")
+def get_element_crop(element_id: str):
+    clean_elem = element_id.strip()
+    parts = clean_elem.split("_P")
+    if len(parts) >= 2:
+        doc_hash = parts[0].replace("sha256:", "")
+        crop_path = settings.INTERMEDIATE_DIR / doc_hash / "crops" / f"{clean_elem}.png"
+        if crop_path.exists():
+            return FileResponse(str(crop_path), media_type="image/png")
+    raise HTTPException(status_code=404, detail=f"Crop for element {element_id} not found")
+
+
+class CompareRequest(BaseModel):
+    document_ids: List[str]
+    query: str
+    top_k: int = 10
+
+
+@app.post("/api/v1/compare", response_model=GroundedAnswer)
+def compare_documents(request: CompareRequest):
+    if len(request.document_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 document IDs are required for comparison.")
+
+    all_candidates = []
+    for d_id in request.document_ids:
+        cands = retrieval_engine.retrieve(query=request.query, filter_doc_id=d_id, top_candidates=15)
+        all_candidates.extend(cands)
+
+    top_candidates = reranker.rerank(query=request.query, candidates=all_candidates, top_n=request.top_k)
+    bundle_text, source_map = EvidenceBundler.build_evidence_bundle(top_candidates)
+    raw_answer = llm_orchestrator.generate_grounded_answer(query=request.query, evidence_bundle=bundle_text)
+    grounded = citation_verifier.verify_answer(raw_answer=raw_answer, valid_sources=source_map)
+    return grounded

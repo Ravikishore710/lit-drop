@@ -51,7 +51,7 @@ class AppSettings(BaseSettings):
     # Local LLM Fallback
     LOCAL_LLM_ENABLED: bool = False
     LOCAL_LLM_BASE_URL: str = "http://localhost:11434/v1"
-    LOCAL_LLM_MODEL: str = "deepseek-r1:1.5b"
+    LOCAL_LLM_MODEL: str = "Qwen/Qwen2.5-0.5B-Instruct"
 
     # Embeddings
     EMBEDDING_PROVIDER: str = "sentence_transformers"
