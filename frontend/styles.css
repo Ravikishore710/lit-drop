@@ -708,28 +708,56 @@ body {
 }
 
 .bbox-rect.type-table {
-  fill: var(--color-table-bg);
-  stroke: var(--color-table);
+  fill: rgba(5, 150, 105, 0.22) !important;
+  stroke: #059669 !important;
+  stroke-width: 1.8 !important;
 }
 
 .bbox-rect.type-figure {
-  fill: var(--color-figure-bg);
-  stroke: var(--color-figure);
+  fill: rgba(124, 58, 237, 0.20) !important;
+  stroke: #7c3aed !important;
+  stroke-width: 1.8 !important;
 }
 
 .bbox-rect.type-equation {
-  fill: var(--color-equation-bg);
-  stroke: var(--color-equation);
+  fill: rgba(217, 119, 6, 0.24) !important;
+  stroke: #d97706 !important;
+  stroke-width: 1.8 !important;
 }
 
 .bbox-rect.type-text {
-  fill: var(--color-text-bg);
-  stroke: var(--color-text);
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: #3b82f6;
+  stroke-width: 1;
 }
 
 .bbox-rect:hover {
-  stroke-width: 2.5 !important;
-  fill-opacity: 0.35 !important;
+  stroke-width: 3 !important;
+  fill-opacity: 0.45 !important;
+}
+
+.badge.type-table {
+  background-color: rgba(5, 150, 105, 0.15);
+  color: #059669;
+  border: 1px solid #059669;
+}
+
+.badge.type-equation {
+  background-color: rgba(217, 119, 6, 0.15);
+  color: #d97706;
+  border: 1px solid #d97706;
+}
+
+.badge.type-figure {
+  background-color: rgba(124, 58, 237, 0.15);
+  color: #7c3aed;
+  border: 1px solid #7c3aed;
+}
+
+.badge.type-text {
+  background-color: rgba(37, 99, 235, 0.15);
+  color: #2563eb;
+  border: 1px solid #2563eb;
 }
 
 /* Pulsing Proof Highlight on Citation Click */

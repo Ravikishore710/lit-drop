@@ -185,13 +185,24 @@ function setupEventListeners() {
     }
   });
 
-  // Q&A Submit Form
+  // Q&A Submit Form & Enter Key Handler
   qaForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const query = qaQueryInput.value.trim();
     if (query) {
       executeUserQuery(query);
       qaQueryInput.value = "";
+    }
+  });
+
+  qaQueryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const query = qaQueryInput.value.trim();
+      if (query) {
+        executeUserQuery(query);
+        qaQueryInput.value = "";
+      }
     }
   });
 
@@ -243,10 +254,36 @@ function setupEventListeners() {
     }
   });
 
-  // Element Inspector Close
+  // Element Inspector Close Handlers (X button, footer button, backdrop click, Escape key)
   closeInspectorModal.addEventListener("click", () => {
     elementInspectorModal.style.display = "none";
   });
+  const btnModalCloseFooter = document.getElementById("btn-modal-close-footer");
+  if (btnModalCloseFooter) {
+    btnModalCloseFooter.addEventListener("click", () => {
+      elementInspectorModal.style.display = "none";
+    });
+  }
+
+  elementInspectorModal.addEventListener("click", (e) => {
+    if (e.target === elementInspectorModal || e.target.classList.contains("modal-close-btn")) {
+      elementInspectorModal.style.display = "none";
+    }
+  });
+
+  uploadModal.addEventListener("click", (e) => {
+    if (e.target === uploadModal || e.target.classList.contains("modal-close-btn")) {
+      uploadModal.style.display = "none";
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      elementInspectorModal.style.display = "none";
+      uploadModal.style.display = "none";
+    }
+  });
+
   btnCopyElementContent.addEventListener("click", () => {
     navigator.clipboard.writeText(modalElementContent.innerText);
     btnCopyElementContent.innerText = "Copied!";
@@ -430,7 +467,7 @@ function renderBoundingBoxes() {
     rect.setAttribute("data-element-id", el.element_id);
 
     // Color-code class
-    const typeClass = getElementTypeClass(el.element_type);
+    const typeClass = getElementTypeClass(el);
     rect.setAttribute("class", `bbox-rect ${typeClass}`);
 
     // Click to Inspect Modal
@@ -443,11 +480,46 @@ function renderBoundingBoxes() {
   });
 }
 
-function getElementTypeClass(type) {
-  const t = (type || "").toLowerCase();
-  if (t.includes("table")) return "type-table";
-  if (t.includes("figure") || t.includes("chart") || t.includes("caption")) return "type-figure";
-  if (t.includes("equation") || t.includes("formula")) return "type-equation";
+function getPaperTitle(docId) {
+  if (!docId && state.selectedDoc) return state.selectedDoc.title || state.selectedDoc.filename;
+  if (state.selectedDoc && (state.selectedDoc.document_id === docId || (state.selectedDoc.arxiv_id && (docId + "").includes(state.selectedDoc.arxiv_id)))) {
+    return state.selectedDoc.title || state.selectedDoc.filename;
+  }
+  const match = state.documents.find(
+    (d) => d.document_id === docId || (d.arxiv_id && (docId + "").includes(d.arxiv_id)) || (d.title && (docId + "").includes(d.title))
+  );
+  return match ? match.title : (state.selectedDoc?.title || "Scientific Paper");
+}
+
+function getElementTypeClass(el) {
+  const t = typeof el === "string" ? el.toLowerCase() : ((el.element_type || "") + "").toLowerCase();
+  const text = typeof el === "object" ? (el.normalized_content || "") : "";
+
+  // 1. Tables (headers, columns, pipes, numbers grids)
+  if (
+    t.includes("table") ||
+    /\bTable\s+\d+/i.test(text) ||
+    (text.includes("|") && text.split("|").length > 2) ||
+    /\b(projected dimensions|time saved|memory saved|length n|dimension k)\b/i.test(text)
+  ) {
+    return "type-table";
+  }
+
+  // 2. Equations & Formulas
+  if (
+    t.includes("equation") ||
+    t.includes("formula") ||
+    /[=∑∫√×±]|\b(softmax|Attention|head_i|d_k|d_v|W_i|d_model)\b|\\frac|\\sum|\(\d+\)\s*$/i.test(text) ||
+    /\b(dim|matrix|vector|parameter)\b.*[=<>]/i.test(text)
+  ) {
+    return "type-equation";
+  }
+
+  // 3. Figures & Charts
+  if (t.includes("figure") || t.includes("chart") || t.includes("caption") || /\b(Figure|Fig\.)\s+\d+/i.test(text)) {
+    return "type-figure";
+  }
+
   return "type-text";
 }
 
@@ -462,9 +534,10 @@ function jumpToCitationProof(citation) {
   state.currentPage = citation.page_number;
   currentPageIndicator.innerText = `Page ${state.currentPage} of ${state.totalPages}`;
 
-  // 2. Display Proof Banner
+  // 2. Display Proof Banner with human paper title
+  const paperName = getPaperTitle(citation.document_id);
   proofBadgeLabel.innerText = citation.source_id;
-  proofBannerText.innerText = `Proof focused on Page ${citation.page_number} • "${(citation.text_snippet || "").slice(0, 75)}..."`;
+  proofBannerText.innerText = `Proof focused: ${paperName} • Page ${citation.page_number} • "${(citation.text_snippet || "").slice(0, 75)}..."`;
   activeProofBanner.style.display = "flex";
 
   // 3. Render page and trigger bounding box highlight
@@ -517,24 +590,32 @@ function inspectProofCitation(citation) {
   if (el) {
     openElementInspector(el);
   } else {
-    // Open modal with citation snippet directly
+    const paperTitle = getPaperTitle(citation.document_id);
+    modalElementTypeBadge.className = "badge type-table";
     modalElementTypeBadge.innerText = citation.source_id;
-    modalElementId.innerText = `Proof Snippet (Page ${citation.page_number})`;
-    modalMetaPage.innerText = citation.page_number;
-    modalMetaBbox.innerText = targetId || "Cited Candidate";
-    modalMetaReading.innerText = citation.parent_section_id || "Body";
+    modalElementId.innerText = `${paperTitle} • Page ${citation.page_number} Proof`;
+    modalMetaPage.innerText = `Page ${citation.page_number}`;
+    modalMetaBbox.innerText = "Evidence Candidate";
+    modalMetaReading.innerText = citation.parent_section_id || "Section";
     modalElementContent.innerText = citation.text_snippet || "No text available";
     elementInspectorModal.style.display = "flex";
   }
 }
 
 function openElementInspector(el) {
-  modalElementTypeBadge.innerText = el.element_type || "Element";
-  modalElementId.innerText = el.element_id;
-  modalMetaPage.innerText = el.page_number;
-  modalMetaBbox.innerText = JSON.stringify(el.bounding_box || []);
-  modalMetaReading.innerText = el.reading_order || "0";
-  modalElementContent.innerText = el.normalized_content || "(No normalized content)";
+  const paperTitle = getPaperTitle(state.selectedDoc?.document_id);
+  const typeClass = getElementTypeClass(el);
+  const typeLabel = typeClass.replace("type-", "").toUpperCase();
+
+  modalElementTypeBadge.className = `badge ${typeClass}`;
+  modalElementTypeBadge.innerText = typeLabel;
+  modalElementId.innerText = `${paperTitle} • Page ${el.page_number} (Item #${el.reading_order ?? 1})`;
+  modalMetaPage.innerText = `Page ${el.page_number}`;
+  modalMetaBbox.innerText = Array.isArray(el.bounding_box)
+    ? el.bounding_box.map((n) => Math.round(n)).join(", ")
+    : "N/A";
+  modalMetaReading.innerText = `#${el.reading_order ?? 1}`;
+  modalElementContent.innerText = el.normalized_content || "(No text content)";
   elementInspectorModal.style.display = "flex";
 }
 
@@ -572,29 +653,40 @@ async function executeUserQuery(query) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // Format inline citations: replace [SRC_XX] with clickable badges
+    // Clean internal doc/sha256 prefixes from answer text
     const rawAnswer = data.answer || "No response received.";
-    const formattedAnswer = escapeHtml(rawAnswer).replace(
+    const cleanAnswer = rawAnswer
+      .replace(/\(Doc:\s*[^)]+\):?/gi, "")
+      .replace(/\bDoc:\s*sha256:[a-f0-9]+/gi, "")
+      .replace(/\bsha256:[a-f0-9]{12,}\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    const formattedAnswer = escapeHtml(cleanAnswer).replace(
       /\[(SRC_\d{2})\]/g,
       `<button class="citation-badge" data-source-id="$1">[$1]</button>`
     );
 
-    // Build evidence cards HTML
+    // Build evidence cards HTML with clean paper titles
     const citations = data.citations || [];
     const evidenceHtml = citations.length > 0
       ? `
         <div class="evidence-section">
           <div class="evidence-header">Verified Evidence Citations (Click to jump to proof):</div>
           ${citations
-            .map((c) => `
-              <div class="evidence-card" data-source-id="${c.source_id}">
-                <div class="evidence-card-meta">
-                  <span class="proof-badge">${c.source_id}</span>
-                  <span style="font-family:var(--font-mono); color:var(--accent-primary);">Page ${c.page_number}</span>
+            .map((c) => {
+              const paperName = getPaperTitle(c.document_id);
+              return `
+                <div class="evidence-card" data-source-id="${c.source_id}">
+                  <div class="evidence-card-meta">
+                    <span class="proof-badge">${c.source_id}</span>
+                    <span style="font-weight:600; color:var(--text-primary); font-size:11.5px;">${escapeHtml(paperName)}</span>
+                    <span style="font-family:var(--font-mono); color:var(--accent-primary);">Page ${c.page_number}</span>
+                  </div>
+                  <div class="evidence-card-text">${escapeHtml(c.text_snippet || "")}</div>
                 </div>
-                <div class="evidence-card-text">${escapeHtml(c.text_snippet || "")}</div>
-              </div>
-            `)
+              `;
+            })
             .join("")}
         </div>
       `

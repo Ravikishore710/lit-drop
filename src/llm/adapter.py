@@ -202,5 +202,15 @@ class LLMOrchestrator:
                 logger.warning(f"Local Qwen generation exception: {exc}")
 
         # Fallback 3: Strict Extractive Grounded Synthesizer (Zero Hallucination, Zero Placeholders)
-        return self._extractive_grounded_synthesis(query, evidence_bundle)
+        ans = self._extractive_grounded_synthesis(query, evidence_bundle)
+        return self._sanitize_answer(ans)
+
+    def _sanitize_answer(self, text: str) -> str:
+        """Removes internal evidence prefixes and raw sha256 hashes from user-facing text."""
+        import re
+        text = re.sub(r"\(Doc:\s*[^)]+\):?", "", text)
+        text = re.sub(r"\bDoc:\s*sha256:[a-f0-9]+", "", text)
+        text = re.sub(r"\bsha256:[a-f0-9]{12,}\b", "", text)
+        text = re.sub(r"[ \t]+", " ", text).strip()
+        return text
 
