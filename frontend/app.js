@@ -18,6 +18,12 @@ const state = {
   zoomLevel: 1.0,
   activeProofCitation: null,
   compareSelectedIds: [],
+  graphZoom: 1.0,
+  graphPan: { x: 0, y: 0 },
+  isPanningGraph: false,
+  startPan: { x: 0, y: 0 },
+  selectedGraphNode: null,
+  graphData: null,
 };
 
 // DOM References
@@ -73,6 +79,17 @@ const globalSearchResults = document.getElementById("global-search-results");
 const graphDocTitle = document.getElementById("graph-doc-title");
 const graphStatsBadge = document.getElementById("graph-stats-badge");
 const graphSvg = document.getElementById("graph-svg");
+const btnGraphZoomIn = document.getElementById("btn-graph-zoom-in");
+const btnGraphZoomOut = document.getElementById("btn-graph-zoom-out");
+const btnGraphZoomReset = document.getElementById("btn-graph-zoom-reset");
+const graphInspector = document.getElementById("graph-inspector");
+const inspectorTypeBadge = document.getElementById("inspector-type-badge");
+const inspectorNodeId = document.getElementById("inspector-node-id");
+const inspectorTitle = document.getElementById("inspector-title");
+const inspectorSnippet = document.getElementById("inspector-snippet");
+const inspectorMetaFields = document.getElementById("inspector-meta-fields");
+const btnInspectorJump = document.getElementById("btn-inspector-jump");
+const btnCloseInspector = document.getElementById("btn-close-inspector");
 
 // Modals
 const uploadBtnTrigger = document.getElementById("upload-btn-trigger");
@@ -221,6 +238,53 @@ function setupEventListeners() {
   globalSearchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runGlobalHybridSearch();
   });
+
+  // Graph Toolbar & Interactive Panning
+  if (btnGraphZoomIn) {
+    btnGraphZoomIn.addEventListener("click", () => {
+      state.graphZoom = Math.min(3.0, state.graphZoom * 1.25);
+      applyGraphTransform();
+    });
+  }
+  if (btnGraphZoomOut) {
+    btnGraphZoomOut.addEventListener("click", () => {
+      state.graphZoom = Math.max(0.3, state.graphZoom * 0.8);
+      applyGraphTransform();
+    });
+  }
+  if (btnGraphZoomReset) {
+    btnGraphZoomReset.addEventListener("click", () => {
+      state.graphZoom = 1.0;
+      state.graphPan = { x: 0, y: 0 };
+      applyGraphTransform();
+    });
+  }
+  if (btnCloseInspector) {
+    btnCloseInspector.addEventListener("click", () => {
+      if (graphInspector) graphInspector.style.display = "none";
+    });
+  }
+
+  if (graphSvg) {
+    graphSvg.addEventListener("mousedown", (e) => {
+      if (e.target === graphSvg || e.target.id === "graph-main-g" || e.target.tagName === "svg") {
+        state.isPanningGraph = true;
+        state.startPan = { x: e.clientX - state.graphPan.x, y: e.clientY - state.graphPan.y };
+      }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (state.isPanningGraph) {
+        state.graphPan.x = e.clientX - state.startPan.x;
+        state.graphPan.y = e.clientY - state.startPan.y;
+        applyGraphTransform();
+      }
+    });
+
+    window.addEventListener("mouseup", () => {
+      state.isPanningGraph = false;
+    });
+  }
 
   // Upload Modal Handlers
   uploadBtnTrigger.addEventListener("click", () => {
@@ -458,12 +522,17 @@ function renderBoundingBoxes() {
     const w = Math.max(2, x1 - x0);
     const h = Math.max(2, y1 - y0);
 
+    // Suppress tiny fragmented micro-boxes (<8x8) that clutter formulas and punctuation
+    if (w < 8 && h < 8) return;
+
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     rect.setAttribute("x", x0);
     rect.setAttribute("y", y0);
     rect.setAttribute("width", w);
     rect.setAttribute("height", h);
-    rect.setAttribute("stroke-width", "1.2");
+    rect.setAttribute("rx", "2");
+    rect.setAttribute("ry", "2");
+    rect.setAttribute("stroke-width", "1.4");
     rect.setAttribute("data-element-id", el.element_id);
 
     // Color-code class
@@ -481,14 +550,23 @@ function renderBoundingBoxes() {
 }
 
 function getPaperTitle(docId) {
-  if (!docId && state.selectedDoc) return state.selectedDoc.title || state.selectedDoc.filename;
-  if (state.selectedDoc && (state.selectedDoc.document_id === docId || (state.selectedDoc.arxiv_id && (docId + "").includes(state.selectedDoc.arxiv_id)))) {
+  if (!docId) return state.selectedDoc ? (state.selectedDoc.title || state.selectedDoc.filename) : "Scientific Paper";
+  const cleanId = String(docId).replace(/^sha256:/i, "").trim();
+
+  // Try exact or prefix match against documents catalog
+  const match = state.documents.find((d) => {
+    const dId = String(d.document_id || "").replace(/^sha256:/i, "").trim();
+    if (dId && (dId === cleanId || cleanId.startsWith(dId) || dId.startsWith(cleanId))) return true;
+    if (d.arxiv_id && (cleanId.includes(d.arxiv_id) || d.arxiv_id.includes(cleanId))) return true;
+    if (d.title && (cleanId.includes(d.title) || d.title.includes(cleanId))) return true;
+    return false;
+  });
+
+  if (match) return match.title || match.filename;
+  if (state.selectedDoc && (state.selectedDoc.document_id?.includes(cleanId) || cleanId.includes(state.selectedDoc.document_id || ""))) {
     return state.selectedDoc.title || state.selectedDoc.filename;
   }
-  const match = state.documents.find(
-    (d) => d.document_id === docId || (d.arxiv_id && (docId + "").includes(d.arxiv_id)) || (d.title && (docId + "").includes(d.title))
-  );
-  return match ? match.title : (state.selectedDoc?.title || "Scientific Paper");
+  return cleanId.length > 24 ? cleanId.substring(0, 14) + "..." : cleanId;
 }
 
 function getElementTypeClass(el) {
@@ -806,15 +884,19 @@ async function runCrossPaperCompare() {
       )
       .join("");
 
+    const executiveReportHtml = renderExecutiveMarkdown(data.answer);
+
     compareResultsArea.innerHTML = `
       <div class="chat-bubble assistant" style="width:100%;">
-        <div class="bubble-body" style="padding:18px;">
-          <div class="answer-meta-row">
-            <span style="font-weight:600; font-size:13px; color:var(--accent-primary);">Cross-Paper Comparative Analysis</span>
+        <div class="bubble-body" style="padding:20px;">
+          <div class="answer-meta-row" style="margin-bottom:16px;">
+            <span style="font-weight:700; font-size:13.5px; color:var(--accent-primary);">Cross-Paper Comparative Synthesis</span>
             <span class="confidence-chip">Confidence: ${(data.confidence * 100).toFixed(0)}%</span>
           </div>
-          <div style="font-size:13.5px; line-height:1.6; margin-bottom:14px;">${formattedAns}</div>
-          <div class="evidence-section">
+          <div class="comparison-card">
+            ${executiveReportHtml}
+          </div>
+          <div class="evidence-section" style="margin-top:20px;">
             <div class="evidence-header">Supporting Cross-Paper Evidence:</div>
             ${evidenceList}
           </div>
@@ -824,6 +906,89 @@ async function runCrossPaperCompare() {
   } catch (err) {
     compareResultsArea.innerHTML = `<div class="loading-state" style="color:#ef4444;">Comparison error: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+function renderExecutiveMarkdown(text) {
+  if (!text) return "";
+  let clean = text;
+
+  // 1. Resolve raw SHA hashes e.g. sha256:5692a5... or sha256:...
+  clean = clean.replace(/sha256:([a-f0-9]{8,})/gi, (match, hash) => {
+    return getPaperTitle(hash);
+  });
+  clean = clean.replace(/\bDoc(?:ument)?\s*`?([a-f0-9]{16,})`?/gi, (match, hash) => {
+    return `**${getPaperTitle(hash)}**`;
+  });
+
+  // 2. Remove leaked system artifacts
+  clean = clean.replace(/\(Doc:\s*[^)]+\):\s*/g, "");
+
+  // 3. Process line-by-line
+  const lines = clean.split("\n");
+  let html = [];
+  let inList = false;
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (inList) {
+        html.push("</ul>");
+        inList = false;
+      }
+      continue;
+    }
+
+    // Horizontal Rule
+    if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+      if (inList) {
+        html.push("</ul>");
+        inList = false;
+      }
+      html.push('<hr class="comparison-divider" />');
+      continue;
+    }
+
+    // Section Headings: ### Heading
+    const hMatch = trimmed.match(/^(#{1,4})\s*(.*)$/);
+    if (hMatch) {
+      if (inList) {
+        html.push("</ul>");
+        inList = false;
+      }
+      let hText = hMatch[2].replace(/\*\*/g, "").trim();
+      html.push(`<h3 class="comparison-section-title">${escapeHtml(hText)}</h3>`);
+      continue;
+    }
+
+    // Lists: * or - or 1.
+    const listMatch = trimmed.match(/^(\*|-|\d+\.)\s+(.*)$/);
+    if (listMatch) {
+      if (!inList) {
+        html.push('<ul class="comparison-list">');
+        inList = true;
+      }
+      let itemContent = listMatch[2];
+      itemContent = escapeHtml(itemContent).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      itemContent = itemContent.replace(/\[(SRC_\d{2})\]/g, '<span class="proof-badge">$1</span>');
+      html.push(`<li class="comparison-list-item">${itemContent}</li>`);
+      continue;
+    }
+
+    // Regular Lead Paragraph
+    if (inList) {
+      html.push("</ul>");
+      inList = false;
+    }
+    let pContent = escapeHtml(trimmed).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    pContent = pContent.replace(/\[(SRC_\d{2})\]/g, '<span class="proof-badge">$1</span>');
+    html.push(`<p class="comparison-card-lead">${pContent}</p>`);
+  }
+
+  if (inList) {
+    html.push("</ul>");
+  }
+
+  return `<div class="comparison-report">${html.join("")}</div>`;
 }
 
 // ==========================================================================
@@ -861,16 +1026,14 @@ async function runGlobalHybridSearch() {
           ? `RRF Score: ${hit.fusion_score.toFixed(4)}`
           : `Score: ${hit.score?.toFixed(2) || ""}`;
 
-        // Find paper title if possible
-        const docMatch = state.documents.find((d) => hit.document_id.includes(d.arxiv_id || ""));
-        const paperName = docMatch ? docMatch.title : `Document ${hit.document_id.slice(0, 16)}...`;
+        const paperName = getPaperTitle(hit.document_id);
 
         return `
         <div class="search-result-card">
           <div class="search-result-meta">
             <span class="proof-badge">Rank #${idx + 1}</span>
-            <span style="font-weight:600; color:var(--text-primary);">${escapeHtml(paperName)}</span>
-            <span style="font-family:var(--font-mono); color:var(--accent-primary);">${score}</span>
+            <span style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(paperName)}</span>
+            <span style="font-family:var(--font-mono); color:var(--accent-primary); font-size:11.5px;">${score}</span>
           </div>
           <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.5;">${escapeHtml(hit.text || "")}</div>
         </div>
@@ -885,19 +1048,40 @@ async function runGlobalHybridSearch() {
 // ==========================================================================
 // Citation Knowledge Graph Visualizer
 // ==========================================================================
+function applyGraphTransform() {
+  const g = document.getElementById("graph-main-g");
+  if (g) {
+    g.setAttribute(
+      "transform",
+      `translate(${state.graphPan.x}, ${state.graphPan.y}) scale(${state.graphZoom})`
+    );
+  }
+}
+
 async function fetchAndRenderGraph(docId) {
   graphSvg.innerHTML = "";
+  if (graphInspector) graphInspector.style.display = "none";
+  state.selectedGraphNode = null;
+  state.graphZoom = 1.0;
+  state.graphPan = { x: 0, y: 0 };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/documents/${docId}/graph`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const graph = await res.json();
+    state.graphData = graph;
 
     const nodes = graph.nodes || [];
     const edges = graph.edges || [];
     graphStatsBadge.innerText = `${nodes.length} nodes, ${edges.length} edges`;
 
+    const titleEl = document.getElementById("graph-doc-title");
+    if (titleEl) {
+      titleEl.innerText = getPaperTitle(docId);
+    }
+
     const w = graphSvg.clientWidth || 900;
-    const h = graphSvg.clientHeight || 500;
+    const h = graphSvg.clientHeight || 560;
     graphSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
 
     if (nodes.length === 0) {
@@ -911,22 +1095,50 @@ async function fetchAndRenderGraph(docId) {
       return;
     }
 
-    // Circular layout
+    // Root interactive group for Zoom & Pan
+    const mainG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    mainG.setAttribute("id", "graph-main-g");
+    graphSvg.appendChild(mainG);
+
+    // Dynamic Multi-Ring Layout
     const centerX = w / 2;
     const centerY = h / 2;
-    const radius = Math.min(w, h) * 0.38;
 
-    const displayNodes = nodes.slice(0, 36);
+    const docNodes = nodes.filter((n) => n.type === "Document");
+    const pageNodes = nodes.filter((n) => n.type === "Page");
+    const elemNodes = nodes.filter((n) => n.type !== "Document" && n.type !== "Page");
+
     const nodeCoords = new Map();
 
-    displayNodes.forEach((node, i) => {
-      const angle = (2 * Math.PI * i) / displayNodes.length;
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
+    // Center root document
+    docNodes.forEach((node) => {
+      nodeCoords.set(node.id, { x: centerX, y: centerY, ...node });
+    });
+
+    // Inner ring: Pages
+    const pageRadius = Math.min(w, h) * 0.22;
+    pageNodes.forEach((node, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(1, pageNodes.length);
+      const x = centerX + pageRadius * Math.cos(angle);
+      const y = centerY + pageRadius * Math.sin(angle);
       nodeCoords.set(node.id, { x, y, ...node });
     });
 
-    // Edges
+    // Outer ring: Elements / Citations
+    const displayElems = elemNodes.slice(0, 48);
+    const elemRadius = Math.min(w, h) * 0.40;
+    displayElems.forEach((node, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(1, displayElems.length);
+      const x = centerX + elemRadius * Math.cos(angle);
+      const y = centerY + elemRadius * Math.sin(angle);
+      nodeCoords.set(node.id, { x, y, ...node });
+    });
+
+    // Render Edges
+    const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    edgeGroup.setAttribute("class", "graph-edges-layer");
+    mainG.appendChild(edgeGroup);
+
     edges.forEach((edge) => {
       const source = nodeCoords.get(edge.source);
       const target = nodeCoords.get(edge.target);
@@ -937,36 +1149,162 @@ async function fetchAndRenderGraph(docId) {
         line.setAttribute("x2", target.x);
         line.setAttribute("y2", target.y);
         line.setAttribute("stroke", "var(--border-medium)");
-        line.setAttribute("stroke-width", "1");
-        line.setAttribute("stroke-opacity", "0.4");
-        graphSvg.appendChild(line);
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-opacity", "0.35");
+        line.setAttribute("data-source", edge.source);
+        line.setAttribute("data-target", edge.target);
+        edgeGroup.appendChild(line);
       }
     });
 
-    // Nodes
+    // Render Nodes Layer
+    const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    nodeGroup.setAttribute("class", "graph-nodes-layer");
+    mainG.appendChild(nodeGroup);
+
     nodeCoords.forEach((node) => {
+      const gNode = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      gNode.setAttribute("class", "graph-node-group");
+      gNode.style.cursor = "pointer";
+
+      let col = "#f59e0b";
+      let r = 6;
+      if (node.type === "Document") {
+        col = "#2563eb";
+        r = 13;
+      } else if (node.type === "Page") {
+        col = "#10b981";
+        r = 8;
+      } else if ((node.element_type || "").toLowerCase().includes("citation")) {
+        col = "#8b5cf6";
+        r = 7;
+      }
+
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", node.x);
       circle.setAttribute("cy", node.y);
-      circle.setAttribute("r", node.type === "Document" ? 10 : 6);
-
-      let col = "#f59e0b";
-      if (node.type === "Document") col = "#2563eb";
-      else if (node.type === "Page") col = "#10b981";
-
+      circle.setAttribute("r", r);
       circle.setAttribute("fill", col);
-      circle.setAttribute("stroke", "#fff");
+      circle.setAttribute("stroke", "#ffffff");
       circle.setAttribute("stroke-width", "1.5");
-      circle.style.cursor = "pointer";
+      circle.setAttribute("data-node-id", node.id);
 
-      circle.addEventListener("click", () => {
-        alert(`Node: ${node.id}\nType: ${node.type}\nLabel: ${node.title || node.content_preview || ""}`);
+      // Node label for Documents and Pages
+      if (node.type === "Document" || node.type === "Page") {
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", node.x);
+        label.setAttribute("y", node.y + (node.type === "Document" ? 22 : 16));
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("font-size", node.type === "Document" ? "11" : "10");
+        label.setAttribute("font-weight", "600");
+        label.setAttribute("fill", "var(--text-secondary)");
+        label.textContent = node.type === "Document" ? "Paper Root" : `Page ${node.page_number || ""}`;
+        gNode.appendChild(label);
+      }
+
+      gNode.appendChild(circle);
+
+      // Interactive Node Selection
+      gNode.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectGraphNode(node, nodeCoords, edges);
       });
 
-      graphSvg.appendChild(circle);
+      nodeGroup.appendChild(gNode);
     });
+
   } catch (err) {
     console.warn("Graph rendering exception:", err);
+  }
+}
+
+function selectGraphNode(node, nodeCoords, edges) {
+  state.selectedGraphNode = node;
+
+  // 1. Highlight connected edges
+  const allEdges = graphSvg.querySelectorAll(".graph-edges-layer line");
+  allEdges.forEach((line) => {
+    const src = line.getAttribute("data-source");
+    const tgt = line.getAttribute("data-target");
+    if (src === node.id || tgt === node.id) {
+      line.setAttribute("stroke", "var(--accent-primary)");
+      line.setAttribute("stroke-width", "2.5");
+      line.setAttribute("stroke-opacity", "0.9");
+    } else {
+      line.setAttribute("stroke", "var(--border-medium)");
+      line.setAttribute("stroke-width", "1");
+      line.setAttribute("stroke-opacity", "0.2");
+    }
+  });
+
+  // 2. Highlight circle
+  const allCircles = graphSvg.querySelectorAll(".graph-nodes-layer circle");
+  allCircles.forEach((c) => {
+    if (c.getAttribute("data-node-id") === node.id) {
+      c.setAttribute("stroke", "var(--accent-primary)");
+      c.setAttribute("stroke-width", "3");
+      c.style.filter = "drop-shadow(0 0 8px rgba(37, 99, 235, 0.8))";
+    } else {
+      c.setAttribute("stroke", "#ffffff");
+      c.setAttribute("stroke-width", "1.5");
+      c.style.filter = "none";
+    }
+  });
+
+  // 3. Populate and display Node Inspector Drawer
+  if (graphInspector) {
+    graphInspector.style.display = "flex";
+
+    if (inspectorTypeBadge) {
+      inspectorTypeBadge.innerText = node.type || "Element";
+      inspectorTypeBadge.className = `badge type-${(node.type || "text").toLowerCase()}`;
+    }
+    if (inspectorNodeId) {
+      inspectorNodeId.innerText = node.id || "";
+    }
+    if (inspectorTitle) {
+      inspectorTitle.innerText = node.title || (node.type === "Page" ? `Page ${node.page_number}` : (node.element_type || "Structural Element"));
+    }
+    if (inspectorSnippet) {
+      inspectorSnippet.innerText = node.content_preview || node.normalized_content || "No text preview available for this node.";
+    }
+
+    // Degree and relations
+    const incidentEdges = edges.filter((e) => e.source === node.id || e.target === node.id);
+    if (inspectorMetaFields) {
+      inspectorMetaFields.innerHTML = `
+        <div class="inspector-meta-row">
+          <span class="inspector-meta-label">Connected Relations</span>
+          <span class="inspector-meta-val">${incidentEdges.length} edges</span>
+        </div>
+        ${node.page_number ? `
+        <div class="inspector-meta-row">
+          <span class="inspector-meta-label">Page</span>
+          <span class="inspector-meta-val">Page ${node.page_number}</span>
+        </div>` : ""}
+        ${node.section_title ? `
+        <div class="inspector-meta-row">
+          <span class="inspector-meta-label">Section</span>
+          <span class="inspector-meta-val">${escapeHtml(node.section_title)}</span>
+        </div>` : ""}
+      `;
+    }
+
+    // Jump to Paper Studio button action
+    if (btnInspectorJump) {
+      btnInspectorJump.onclick = () => {
+        switchTab("studio");
+        if (node.page_number) {
+          state.currentPage = parseInt(node.page_number, 10);
+          renderCurrentPage();
+          if (node.type !== "Page" && node.type !== "Document") {
+            setTimeout(() => {
+              highlightProofBox(node.id);
+            }, 300);
+          }
+        }
+      };
+    }
   }
 }
 

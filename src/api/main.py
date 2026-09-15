@@ -469,7 +469,7 @@ def search_documents(request: SearchRequest):
         if not INDEXED_DOCUMENTS:
             doc_folder = settings.CANONICAL_DIR / "documents"
             if doc_folder.exists():
-                for df in list(doc_folder.glob("*.json"))[:5]:
+                for df in list(doc_folder.glob("*.json")):
                     ensure_document_indexed(df)
 
     candidates = retrieval_engine.retrieve(
