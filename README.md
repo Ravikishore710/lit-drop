@@ -1,4 +1,4 @@
-# 🔥 lit-drop
+# ⚡ lit-drop
 
 > **Multimodal Scientific Document Intelligence, Hybrid Retrieval & Grounded Reasoning Engine**
 > 
@@ -10,6 +10,63 @@
 [![LLM](https://img.shields.io/badge/LLM-Gemini%203.6%20Flash%20%7C%20Qwen2.5--0.5B-purple.svg)](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct)
 [![Tests](https://img.shields.io/badge/Tests-20%2F20%20Passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-black.svg)](LICENSE)
+
+---
+
+## 🖥️ Interactive Research Studio UI
+
+`lit-drop` features a modern, ultra-responsive research web studio engineered with a Linear/Vercel design aesthetic, sub-millisecond tab switching, seamless Light/Dark mode transitions, and direct proof navigation.
+
+### 1. Paper Studio & Precision Multimodal Bounding Boxes
+Interact with high-resolution 150 DPI page renders where extracted multimodal elements are classified into distinct semantic bounding box overlays:
+* 🟢 **Tables & Benchmarks** (`#0d9488` Emerald / Teal)
+* 🟣 **Figures & Visual Diagrams** (`#7c3aed` Violet)
+* 🟠 **Equations & Math Blocks** (`#d97706` Amber / Gold)
+* 🔵 **Paragraphs & Headings** (`#3b82f6` Tech Blue)
+
+![Paper Studio & Precision Bounding Boxes](docs/images/browser_01_header_studio.png)
+
+---
+
+### 2. Visual Element Proof Inspector
+Click on any bounding box on any page to open the blurred-backdrop **Element Inspector Modal**, exposing exact point coordinates, reading-order indices, normalized LaTeX/text representations, and one-click clipboard copying.
+
+![Visual Element Proof Inspector](docs/images/browser_02_element_inspector.png)
+
+---
+
+### 3. Grounded Q&A & Interactive Citation Navigation
+Ask technical questions about the active paper. Every factual assertion is tagged with an inline citation badge (`[SRC_01]`, `[SRC_02]`). Clicking any citation badge instantly navigates the document viewer to the exact page and highlights the source bounding box with an animated pulsing proof glow.
+
+![Grounded Q&A & Proof Highlighting](docs/images/browser_03_qa_grounded_proof.png)
+
+---
+
+### 4. Cross-Paper Comparative Synthesis (Compare Mode)
+Select multiple papers from the scrollable catalog, ask complex cross-comparative questions, and receive an executive synthesis report structured into formatted comparison cards, section headers, bold bullet points, and verified multi-paper citations with zero raw hash leakage.
+
+![Cross-Paper Comparative Reasoning](docs/images/browser_04_compare_mode.png)
+
+---
+
+### 5. Global Hybrid Corpus Search
+Query across all 20 canonical papers simultaneously. Full-text BM25 lexical search is fused with Qdrant dense vector embeddings using Reciprocal Rank Fusion (RRF), displaying ranked results with canonical paper titles, scores, and keyword snippets.
+
+![Global Hybrid Corpus Search](docs/images/browser_05_global_search.png)
+
+---
+
+### 6. Citation & Structural Knowledge Graph Explorer
+Explore structural hierarchies and citation trees across papers. Features dynamic multi-ring graph layouts (Paper Root &rarr; Pages &rarr; Elements/Citations), interactive Zoom/Pan controls, connected edge highlighting on node click, and a floating **Node Inspector Drawer** with a **"Jump to Paper Studio Page"** action button.
+
+![Citation Knowledge Graph & Inspector](docs/images/browser_06_knowledge_graph_inspector.png)
+
+---
+
+### 7. Native Dark Mode
+Toggle seamlessly between an ultra-clean Light Mode and an eye-friendly, high-contrast Dark Mode (`#090d16` canvas) with customized scrollbars and semantic glows.
+
+![Native Dark Mode](docs/images/browser_08_dark_theme.png)
 
 ---
 
@@ -162,11 +219,12 @@ pytest tests/
 # 20 passed in 129s
 ```
 
-### 4. Start the FastAPI Server
+### 4. Start the Research Studio & API Server
 ```bash
 uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
-Interactive API documentation will be available at `http://localhost:8000/docs`.
+Open **[http://localhost:8000/ui/](http://localhost:8000/ui/)** in your browser to launch the Paper Studio!
+Interactive Swagger API documentation is available at `http://localhost:8000/docs`.
 
 ---
 
@@ -176,11 +234,12 @@ Interactive API documentation will be available at `http://localhost:8000/docs`.
 |---|---|---|
 | `GET` | `/health` | Server health check and API version |
 | `GET` | `/ready` | Subsystem readiness (Qdrant, Neo4j, Embedding) |
+| `GET` | `/ui/` | Interactive Scientific Research Studio Web App |
 | `POST` | `/api/v1/documents` | Upload and asynchronously ingest a scientific PDF |
-| `GET` | `/api/v1/documents` | List all ingested canonical documents |
+| `GET` | `/api/v1/documents` | List all ingested canonical documents (all 20 indexed) |
 | `GET` | `/api/v1/documents/{id}` | Fetch canonical document JSON metadata & structure |
 | `POST` | `/api/v1/documents/{id}/query` | Grounded Q&A on a document with verified citations |
-| `POST` | `/api/v1/search` | Multi-document hybrid search (RRF) |
+| `POST` | `/api/v1/search` | Multi-document hybrid search with RRF fusion |
 | `POST` | `/api/v1/compare` | Multi-paper comparative synthesis & cross-evidence QA |
 | `GET` | `/api/v1/documents/{id}/pages/{page}` | Stream rendered 150 DPI page image |
 | `GET` | `/api/v1/documents/{id}/graph` | Retrieve document citation and section subgraph |
@@ -220,9 +279,9 @@ curl -X POST "http://localhost:8000/api/v1/documents/sha256:1706.03762/query" \
 curl -X POST "http://localhost:8000/api/v1/compare" \
   -H "Content-Type: application/json" \
   -d '{
-    "document_ids": ["sha256:1706.03762", "sha256:1810.04805"],
-    "query": "How does BERT pre-training differ from the standard Transformer training objective?",
-    "top_k": 5
+    "document_ids": ["5692a5514f17c8cf2bc2b55ba2e7e72aa8e090df4872ac8dd2ff9d71c14210ec", "1c4e089b6108f5ed0a2f8301ab07a64eab9851dcb471348b88739a6458e2f215"],
+    "query": "Compare the attention mechanisms and computational complexities of both papers.",
+    "top_k": 10
   }'
 ```
 
@@ -253,8 +312,16 @@ lit-drop/
 │   ├── tables/          # Table structure extraction, Markdown export, & GriTS metric
 │   ├── text/            # Hierarchical semantic chunker
 │   └── vectorstore/     # Qdrant client with HNSW & SQ8 scalar quantization
+├── frontend/            # Precision Research Studio SPA
+│   ├── index.html       # Single-page application layout & SVG viewports
+│   ├── styles.css       # Light/Dark design system with CSS grid & variables
+│   └── app.js           # Client orchestrator: PDF rendering, BBoxes, Graph & Compare
+├── docs/
+│   ├── images/          # Studio UI screenshots & visual proofs
+│   ├── architecture/    # Deep architectural specs & design decisions
+│   └── api/             # OpenAPI contracts & schema references
 ├── data/
-│   ├── canonical/       # Normalized JSON/JSONL representation for 20 sample papers
+│   ├── canonical/       # Normalized JSON representation for 20 sample papers
 │   ├── evaluation/      # Benchmark results and ablation reports
 │   └── raw/             # Real arXiv scientific PDFs
 ├── notebooks/           # Standalone reproducible Colab/Kaggle notebooks
@@ -262,7 +329,7 @@ lit-drop/
 │   ├── integration/     # API endpoints, subsystems, and quantization tests
 │   └── unit/            # Grounding, hashing, chunker, and RRF unit tests
 ├── pyproject.toml       # Build configuration & dependency definitions
-├── README.md            # You are here
+├── README.md            # Comprehensive documentation & research showcase
 └── .gitignore
 ```
 
