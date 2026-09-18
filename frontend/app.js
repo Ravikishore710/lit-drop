@@ -912,13 +912,15 @@ function renderExecutiveMarkdown(text) {
   if (!text) return "";
   let clean = text;
 
-  // 1. Resolve raw SHA hashes e.g. sha256:5692a5... or sha256:...
-  clean = clean.replace(/sha256:([a-f0-9]{8,})/gi, (match, hash) => {
+  // 1. Resolve raw SHA hashes e.g. sha256:5692a5... or `sha256:1c4e08...`
+  clean = clean.replace(/`?sha256:([a-f0-9]+)(\.\.\.)?`?/gi, (match, hash) => {
     return getPaperTitle(hash);
   });
-  clean = clean.replace(/\bDoc(?:ument)?\s*`?([a-f0-9]{16,})`?/gi, (match, hash) => {
+  clean = clean.replace(/\bDoc(?:ument)?\s*`?(?:sha256:)?([a-f0-9]{4,})(\.\.\.)?`?/gi, (match, hash) => {
     return `**${getPaperTitle(hash)}**`;
   });
+  clean = clean.replace(/`?sha256:[^`\s)]*`?/gi, "Document");
+  clean = clean.replace(/sha256:/gi, "");
 
   // 2. Remove leaked system artifacts
   clean = clean.replace(/\(Doc:\s*[^)]+\):\s*/g, "");
